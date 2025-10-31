@@ -1,0 +1,3 @@
+<PIL.Image.Image image mode=RGBA size=473x387 at 0x718D7BB35D50>
+<PIL.Image.Image image mode=RGBA size=473x387 at 0x718D7BCA5BD0>
+The agent has not reached the exit!

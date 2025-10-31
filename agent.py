@@ -41,6 +41,8 @@ renderer_large = TextureRenderer(resolution=480, asset_root=ASSET_ROOT)
 
 from grid_universe.utils.ecs import entities_with_components_at
 from grid_universe.components.properties import Position
+from grid_universe.levels.entity_spec import EntitySpec
+from grid_universe.levels.convert import _entity_object_from_state
 from queue import PriorityQueue
 import random, time
 
@@ -57,7 +59,7 @@ class Node:
         self.parent_action = parent_action
         
     def __lt__(self, other: "Node"):
-        return self.heuristic() < other.heuristic()
+        return self.f() < other.f()
         
     def __eq__(self, value: object) -> bool:
         if type(value) is not Node:
@@ -68,9 +70,35 @@ class Node:
     def manhatan_dis(self, pos_1: tuple[int, int], pos_2: tuple[int, int]):
         return abs(pos_1[0] - pos_2[0]) + abs(pos_1[1] - pos_2[1])
     
-    def heuristic(self):
-        return self.manhatan_dis(self.get_agent_pos(), self.get_exit_position()) + self.state.score
+    def get_cores(self) -> List[tuple[int, int]]:
+        collectibles = self.state.collectible
+        cores: List[tuple[int, int]] = []
+        
+        for key, item in collectibles.items():
+            entity_spec = _entity_object_from_state(self.state, key)
+            if entity_spec.required is not None:
+                position = self.state.position.get(key)
+                if position is None:
+                    raise RuntimeError("Cannot find position of core")
+                
+                cores.append((position.x, position.y))
+        return cores
     
+    def f(self):
+        return 3 * self.heuristic() - self.state.score
+    
+    def heuristic(self):
+        cores = self.get_cores()
+        if len(cores) == 0:
+            return self.manhatan_dis(self.get_agent_pos(), self.get_exit_position())
+        else:
+            min_dis = 100000000000000
+            agent_pos = self.get_agent_pos()
+            for (x, y) in cores:
+                min_dis = min(min_dis, abs(x - agent_pos[0]) + abs(y - agent_pos[1]))
+                
+            return min_dis + len(cores) * 100000
+                
     def get_agent_pos(self) -> tuple[int, int]:
         position = self.state.position.get(next(iter(self.state.agent.keys())))
         
@@ -183,6 +211,8 @@ class Agent:
         return lst_action               
     
     def step(self, state: Level) -> Action:
+        self.distance: dict[Node, int] = {}
+        self.good_action: dict[Node, Action | None] = {}
         self.step_limit = 5
         
         action: Action
@@ -198,14 +228,12 @@ class Agent:
         return action    
 
 def test():
-    from grid_universe.levels.factories import create_coin
-
     level = Level(
-        width=9,
-        height=7,
+        width=11,
+        height=9,
         move_fn=default_move_fn,           # choose movement semantics
-        objective_fn=exit_objective_fn,    # win when stand on exit
-        seed=13,                          # for reproducibility
+        objective_fn=default_objective_fn,    # win when collecting all cores and standing on exit
+        seed=15,                          # for reproducibility
     )
 
     # 2) Layout: floors, then place objects
@@ -216,23 +244,18 @@ def test():
             if y == 0 or y == level.height - 1 or x == 0 or x == level.width - 1:
                 level.add((x, y), create_wall())
 
-    level.add((1, 1), create_agent(health=5))
-    level.add((7, 5), create_exit())
+    level.add((1, 4), create_agent(health=5))
+    level.add((9, 4), create_exit())
 
-    level.add((2, 2), create_wall())
-    level.add((3, 2), create_wall())
-    level.add((4, 2), create_wall())
-    level.add((5, 2), create_wall())
-    level.add((6, 2), create_wall())
+    level.add((5, 1), create_core())
+    level.add((5, 7), create_core())
 
-    level.add((2, 4), create_wall())
-    level.add((3, 4), create_wall())
-    level.add((5, 4), create_wall())
-    level.add((6, 4), create_wall())
+    for y in range(1, 8):
+        for x in range(1, 10):
+            if y == 4 or x == 5:
+                continue
 
-    level.add((2, 1), create_coin(reward=10))
-    level.add((4, 1), create_coin(reward=10))
-    level.add((6, 1), create_coin(reward=10))
+            level.add((x, y), create_wall())
 
     # 3) Convert to runtime State (immutable)
     state = to_state(level)
@@ -247,6 +270,7 @@ def test():
         new_action = agent.step(from_state(current_state))
         current_state = step(current_state, new_action, next(iter(current_state.agent.keys())))
         action_sequence.append(new_action)   
+        print(new_action)
 
     agent_id = next(iter(state.agent.keys()))
 
