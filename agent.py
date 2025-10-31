@@ -39,6 +39,8 @@ from grid_universe.levels.factories import create_wall
 renderer = TextureRenderer(resolution=240, asset_root=ASSET_ROOT)
 renderer_large = TextureRenderer(resolution=480, asset_root=ASSET_ROOT)
 
+from grid_universe.utils.ecs import entities_with_components_at
+from grid_universe.components.properties import Position
 from queue import PriorityQueue
 import random, time
 
@@ -67,7 +69,7 @@ class Node:
         return abs(pos_1[0] - pos_2[0]) + abs(pos_1[1] - pos_2[1])
     
     def heuristic(self):
-        return self.manhatan_dis(self.get_agent_pos(), self.get_exit_position()) - self.state.score
+        return self.manhatan_dis(self.get_agent_pos(), self.get_exit_position()) + self.state.score
     
     def get_agent_pos(self) -> tuple[int, int]:
         position = self.state.position.get(next(iter(self.state.agent.keys())))
@@ -95,10 +97,16 @@ class Node:
 MOVE_ACTIONS = [Action.UP, Action.DOWN, Action.LEFT, Action.RIGHT, Action.PICK_UP]
 
 class Agent:
+    distance: dict[Node, int] = {}
+    good_action: dict[Node, Action | None] = {}
+    step_limit: int = 0
+    current_state: State | None = None
+    
     def __init__(self):
         self.distance: dict[Node, int] = {}
         self.good_action: dict[Node, Action | None] = {}
         self.step_limit: int = 0
+        self.current_state = None
         
     def get_exit_position(self, state: State) -> tuple[int, int]:
         exit_id = next(iter(state.exit.keys()))
@@ -127,22 +135,31 @@ class Agent:
         pq.put(initial_node)
         
         end_nodes: List[Node] = []
+        
         while not pq.empty():
             node = pq.get()
-            
+                
             if node in vis:
                 continue
+            
+            agent_pos_x, agent_pos_y = node.get_agent_pos()
             
             vis[node] = True
             if self.is_end_node(node):
                 end_nodes.append(node)
                 continue
+            collectible_ids = entities_with_components_at(node.state, Position(agent_pos_x, agent_pos_y), node.state.collectible)
             
             for action in MOVE_ACTIONS:
-                new_state = node.step(action)
-                new_node = Node(new_state, node, action, node.current_step + 1)
-
-                pq.put(new_node)
+                if action != Action.PICK_UP:
+                    new_state = node.step(action)
+                    new_node = Node(new_state, node, action, node.current_step + 1)
+                    pq.put(new_node)
+                    
+                elif action == Action.PICK_UP and len(collectible_ids) > 0:
+                    new_state = node.step(action)
+                    new_node = Node(new_state, node, action, node.current_step + 1)
+                    pq.put(new_node)
                 
         return self.find_base_action(end_nodes)
                 
@@ -168,8 +185,17 @@ class Agent:
     def step(self, state: Level) -> Action:
         self.step_limit = 5
         
-        current_state = to_state(state)
-        return self.astar(current_state)
+        action: Action
+        
+        if self.current_state is None:
+            current_state = to_state(state)
+            action = self.astar(current_state)
+            self.current_state = step(current_state, action)
+        else:
+            action = self.astar(self.current_state)
+            self.current_state = step(self.current_state, action)
+            
+        return action    
 
 def test():
     from grid_universe.levels.factories import create_coin
