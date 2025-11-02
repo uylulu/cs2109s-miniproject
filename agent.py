@@ -120,7 +120,7 @@ class Node:
         return step(self.state, action, agent_id)
 
     def __hash__(self) -> int:
-        return hash((self.state.position))
+        return hash((self.state.position, self.state.inventory))
 
 
 MOVE_ACTIONS = [
@@ -139,6 +139,12 @@ class Agent:
         self.good_action: "dict[Node, Action]" = {}
         self.step_limit: int = 0
         self.current_state: "State | None" = None
+        self.time_limit: float = 0
+        self.base_time: float = time.time()
+
+        self.steps_left: int = (
+            0  # records the number of steps left that we have explored
+        )
 
     def get_exit_position(self, state: "State") -> tuple[int, int]:
         exit_id = next(iter(state.exit.keys()))
@@ -162,21 +168,31 @@ class Agent:
             or node.current_step >= self.step_limit
         )
 
-    def astar(self, state: "State"):
-        pq: PriorityQueue[Node] = PriorityQueue()
-        vis: dict[Node, bool] = {}
+    # Stochastic function to decide whether to explore or exploit
+    def can_exploit(self) -> bool:
+        # time_left = self.get_time_left()
+        print("STEPS LEFT: ", self.steps_left)
+        return self.steps_left >= self.step_limit / 2
 
+    def astar(self, state: "State"):
         initial_node = Node(state, None, None, 0)
-        if initial_node in self.good_action:
+
+        if initial_node in self.good_action and self.can_exploit():
+            self.steps_left -= 1
             return self.good_action[initial_node]
 
+        self.good_action: "dict[Node, Action]" = {}
+        self.steps_left = 0
+
+        pq: PriorityQueue[Node] = PriorityQueue()
         pq.put(initial_node)
 
+        print("EXPLORING")
+
+        vis: dict[Node, bool] = {}
         end_nodes: "List[Node]" = []
-        cnt: int = 0
         while not pq.empty():
             node = pq.get()
-            cnt += 1
             if node in vis:
                 continue
             agent_pos_x, agent_pos_y = node.get_agent_pos()
@@ -205,7 +221,7 @@ class Agent:
                     if new_node not in vis:
                         pq.put(new_node)
 
-        print("NUMBER OF NODES: ", cnt)
+        self.steps_left = self.step_limit
         return self.find_base_action(end_nodes)
 
     def find_base_action(self, end_nodes: "List[Node]") -> "Action":
@@ -228,10 +244,14 @@ class Agent:
 
         return lst_action
 
+    def get_time_left(self) -> float:
+        return self.time_limit - (time.time() - self.base_time)
+
     def step(self, state: "Level | Observation") -> "Action":
         if not isinstance(state, Level):
             return Action.DOWN
         elif isinstance(state, Level):
+            self.time_limit = 25
             self.step_limit = 15
 
             action: Action

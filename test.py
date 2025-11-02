@@ -71,7 +71,7 @@ def render_state(state: State) -> None:
         subprocess.run(["kitty", "+kitten", "icat", tmp.name])
 
 
-CURRENT_LEVEL: int = 4
+CURRENT_LEVEL: int = 5
 
 
 def generate_state() -> State:
