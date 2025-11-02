@@ -43,7 +43,7 @@ class Node:
         if not isinstance(value, Node):
             return False
 
-        return self.state == value.state
+        return self.__hash__() == value.__hash__()
 
     def manhatan_dis(self, pos_1: tuple[int, int], pos_2: tuple[int, int]):
         return abs(pos_1[0] - pos_2[0]) + abs(pos_1[1] - pos_2[1])
@@ -173,12 +173,12 @@ class Agent:
         pq.put(initial_node)
 
         end_nodes: "List[Node]" = []
-
+        cnt: int = 0
         while not pq.empty():
             node = pq.get()
+            cnt += 1
             if node in vis:
                 continue
-
             agent_pos_x, agent_pos_y = node.get_agent_pos()
 
             vis[node] = True
@@ -205,6 +205,7 @@ class Agent:
                     if new_node not in vis:
                         pq.put(new_node)
 
+        print("NUMBER OF NODES: ", cnt)
         return self.find_base_action(end_nodes)
 
     def find_base_action(self, end_nodes: "List[Node]") -> "Action":
@@ -231,7 +232,7 @@ class Agent:
         if not isinstance(state, Level):
             return Action.DOWN
         elif isinstance(state, Level):
-            self.step_limit = 8
+            self.step_limit = 15
 
             action: Action
 
