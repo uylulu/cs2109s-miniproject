@@ -73,19 +73,22 @@ def render_state(state: State) -> None:
 
 
 from enum import Enum, auto
+from grid_universe.levels.factories import create_hazard
+from grid_universe.components.properties.appearance import AppearanceName
 
 
 class TestLevel[Enum]:
     Level_3 = 1
     Level_4 = auto()
     Level_5 = auto()
+    Level_6_1 = auto()
+    Level_6_2 = auto()
     Level_7 = auto()
     Level_8_1 = auto()
     Level_8_2 = auto()
     Level_8_3 = auto()
-
-
-CURRENT_LEVEL: int = TestLevel.Level_8_3
+    Level_9 = auto()
+    Level_9_1 = auto()
 
 
 def generate_state() -> State:
@@ -179,6 +182,57 @@ def generate_state() -> State:
         # 3) Convert to runtime State (immutable)
         state = to_state(level)
         return state
+    elif CURRENT_LEVEL == TestLevel.Level_6_1:
+        level = Level(
+            width=8,
+            height=1,
+            move_fn=default_move_fn,
+            objective_fn=exit_objective_fn,  # reach the exit to win
+            seed=22,
+        )
+
+        for y in range(8):
+            for x in range(1):
+                level.add((y, x), create_floor())
+
+        portal = create_portal()
+
+        level.add((0, 0), create_agent())  # 5 health by default
+        level.add(
+            (2, 0), create_hazard(appearance=AppearanceName.SPIKE, damage=2)
+        )  # the spike deals 2 damage
+        level.add((4, 0), create_exit())
+
+        state = to_state(level)
+        return state
+
+    elif CURRENT_LEVEL == TestLevel.Level_6_2:
+        level = Level(
+            width=11,
+            height=9,
+            move_fn=default_move_fn,  # choose movement semantics
+            objective_fn=exit_objective_fn,  # reach the exit to win
+            seed=23,  # for reproducibility
+        )
+
+        # 2) Layout: floors, then place objects
+        for y in range(level.height):
+            for x in range(level.width):
+                level.add((x, y), create_floor())
+
+                if x == 4 and y not in (0, 4, 8):
+                    level.add((x, y), create_wall())
+
+        level.add((1, 4), create_agent(health=5))
+        level.add((9, 4), create_exit())
+        level.add(
+            (4, 4), create_hazard(appearance=AppearanceName.LAVA, damage=2, lethal=True)
+        )  # You will die on contact with lava
+
+        # 3) Convert to runtime State (immutable)
+        state = to_state(level)
+        return state
+
     elif CURRENT_LEVEL == TestLevel.Level_7:
         level = Level(
             width=11,
@@ -291,10 +345,82 @@ def generate_state() -> State:
         # 3) Convert to runtime State (immutable)
         state = to_state(level)
         return state
+    elif CURRENT_LEVEL == TestLevel.Level_9:
+        from grid_universe.components.properties import MovingAxis
+        from grid_universe.levels.factories import create_monster
+
+        level = Level(
+            width=13,
+            height=9,
+            move_fn=default_move_fn,  # choose movement semantics
+            objective_fn=exit_objective_fn,  # reach the exit to win
+            seed=24,  # for reproducibility
+        )
+
+        # 2) Layout: floors, then place objects
+        for y in range(level.height):
+            for x in range(level.width):
+                level.add((x, y), create_floor())
+
+                if x in (6, 7) and y not in (4, 5):
+                    level.add((x, y), create_wall())
+
+        level.add((2, 4), create_agent(health=5))
+        level.add((11, 4), create_exit())
+
+        level.add(
+            (6, 4),
+            create_monster(
+                lethal=True, moving_axis=MovingAxis.VERTICAL, moving_direction=1
+            ),
+        )
+        level.add(
+            (7, 4),
+            create_monster(
+                lethal=True, moving_axis=MovingAxis.VERTICAL, moving_direction=1
+            ),
+        )
+
+        # 3) Convert to runtime State (immutable)
+        state = to_state(level)
+        return state
+    elif CURRENT_LEVEL == TestLevel.Level_9_1:
+        from grid_universe.levels.factories import create_monster
+        from grid_universe.components.properties.pathfinding import PathfindingType
+
+        level = Level(
+            width=7,
+            height=5,
+            move_fn=default_move_fn,  # choose movement semantics
+            objective_fn=exit_objective_fn,  # reach the exit to win
+            seed=25,  # for reproducibility
+        )
+
+        # 2) Layout: floors, then place objects
+        for y in range(level.height):
+            for x in range(level.width):
+                level.add((x, y), create_floor())
+
+        agent = create_agent()
+
+        level.add((1, 2), agent)
+        level.add((5, 4), create_exit())
+
+        level.add(
+            (0, 1),
+            create_monster(
+                lethal=True, pathfind_target=agent, path_type=PathfindingType.PATH
+            ),
+        )
+
+        # 3) Convert to runtime State (immutable)
+        state = to_state(level)
+        return state
 
     raise RuntimeError("Cannot find level")
 
 
+CURRENT_LEVEL = TestLevel.Level_9_1
 MAX_NUMBER_OF_STEPS: int = 50
 
 
@@ -306,7 +432,7 @@ def test():
 
     action_list: List[Action] = []
 
-    for i in range(0, MAX_NUMBER_OF_STEPS):
+    for _ in range(0, MAX_NUMBER_OF_STEPS):
         new_action = agent.step(from_state(current_state))
         current_state = step(current_state, new_action)
         action_list.append(new_action)

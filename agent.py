@@ -89,7 +89,9 @@ class Node:
 
     def heuristic(self):
         cores = self.get_cores()
-        if len(cores) == 0:
+        if self.state.lose:
+            return 1000000000000000000
+        elif len(cores) == 0:
             return self.manhatan_dis(self.get_agent_pos(), self.get_exit_position())
         else:
             min_dis = 100000000000000
