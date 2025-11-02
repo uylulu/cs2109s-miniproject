@@ -89,6 +89,9 @@ class TestLevel[Enum]:
     Level_8_3 = auto()
     Level_9 = auto()
     Level_9_1 = auto()
+    Level_11_1 = auto()
+    Level_11_2 = auto()
+    Level_12 = auto()
 
 
 def generate_state() -> State:
@@ -193,7 +196,7 @@ def generate_state() -> State:
 
         for y in range(8):
             for x in range(1):
-                level.add((y, x), create_floor())
+                level.add((y, x), create_floor(cost_amount=3))
 
         portal = create_portal()
 
@@ -416,11 +419,117 @@ def generate_state() -> State:
         # 3) Convert to runtime State (immutable)
         state = to_state(level)
         return state
+    elif CURRENT_LEVEL == TestLevel.Level_11_1:
+        from grid_universe.levels.factories import (
+            create_phasing_effect,
+            create_speed_effect,
+            create_immunity_effect,
+        )
+
+        level = Level(
+            width=13,
+            height=9,
+            move_fn=default_move_fn,  # choose movement semantics
+            objective_fn=exit_objective_fn,  # win when stand on exit
+            seed=123,  # for reproducibility
+        )
+
+        for y in range(level.height):
+            for x in range(level.width):
+                level.add((x, y), create_floor())
+
+                if x == 6:
+                    if y == 4:
+                        level.add((x, y), create_door(key_id="my_key"))
+                    else:
+                        level.add((x, y), create_wall())
+
+        level.add((1, 4), create_agent())
+        level.add((11, 4), create_exit())
+        level.add(
+            (2, 1), create_phasing_effect(time=5)
+        )  # For 5 turns, can walk through walls
+
+        state = to_state(level)
+        return state
+    elif CURRENT_LEVEL == TestLevel.Level_11_2:
+        from grid_universe.levels.factories import create_immunity_effect
+
+        level = Level(
+            width=13,
+            height=9,
+            move_fn=default_move_fn,  # choose movement semantics
+            objective_fn=exit_objective_fn,  # win when stand on exit
+            seed=123,  # for reproducibility
+        )
+
+        for y in range(level.height):
+            for x in range(level.width):
+                level.add((x, y), create_floor(cost_amount=3))
+
+                if x == 6:
+                    if y == 4:
+                        level.add(
+                            (x, y),
+                            create_hazard(
+                                appearance=AppearanceName.LAVA, damage=5, lethal=True
+                            ),
+                        )
+                    else:
+                        level.add((x, y), create_wall())
+
+        level.add((1, 4), create_agent())
+        level.add((11, 4), create_exit())
+        level.add(
+            (2, 1), create_immunity_effect(usage=1)
+        )  # You arre immune to damage once.
+
+        state = to_state(level)
+        return state
+    elif CURRENT_LEVEL == TestLevel.Level_12:
+        from grid_universe.components.properties import MovingAxis
+        from grid_universe.levels.factories import create_speed_effect, create_monster
+
+        level = Level(
+            width=13,
+            height=9,
+            move_fn=default_move_fn,  # choose movement semantics
+            objective_fn=exit_objective_fn,  # win when stand on exit
+            seed=123,  # for reproducibility
+        )
+
+        for y in range(level.height):
+            for x in range(level.width):
+                level.add((x, y), create_floor())
+
+                if 6 <= x <= 8:
+                    if y == 4:
+                        level.add(
+                            (x, y),
+                            create_monster(
+                                lethal=True,
+                                moving_axis=MovingAxis.VERTICAL,
+                                moving_direction=1,
+                            ),
+                        )
+                    elif y == 5:
+                        continue
+                    else:
+                        level.add((x, y), create_wall())
+
+        level.add((1, 4), create_agent())
+        level.add((11, 4), create_exit())
+        level.add(
+            (5, 5), create_speed_effect(multiplier=2, time=3)
+        )  # For 3 turns, your speed is doubled
+
+        state = to_state(level)
+        return state
 
     raise RuntimeError("Cannot find level")
 
 
-CURRENT_LEVEL = TestLevel.Level_9_1
+CURRENT_LEVEL = TestLevel.Level_12
 MAX_NUMBER_OF_STEPS: int = 50
 
 
@@ -436,7 +545,7 @@ def test():
         new_action = agent.step(from_state(current_state))
         current_state = step(current_state, new_action)
         action_list.append(new_action)
-
+        print(current_state.score)
         print(new_action, "HERE BRO")
         render_state(current_state)
 

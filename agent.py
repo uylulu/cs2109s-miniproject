@@ -67,8 +67,13 @@ class Node:
 
     def check_inventory(self) -> bool:
         agent_id = self.get_agent_id()
+        inventory = self.state.inventory.get(agent_id)
 
-        return self.state.inventory.get(agent_id) is not None
+        if inventory is not None and len(inventory.item_ids) > 0:
+            print("HERE BRO", inventory.item_ids)
+            return True
+
+        return False
 
     def get_cores(self) -> "List[tuple[int, int]]":
         collectibles = self.state.collectible
@@ -85,7 +90,7 @@ class Node:
         return cores
 
     def f(self):
-        return 3 * self.heuristic() - self.state.score
+        return self.heuristic() - self.state.score
 
     def heuristic(self):
         cores = self.get_cores()
@@ -122,7 +127,17 @@ class Node:
         return step(self.state, action, agent_id)
 
     def __hash__(self) -> int:
-        return hash((self.state.position, self.state.inventory))
+        agent_id = next(iter(self.state.agent.keys()))
+        return hash(
+            (
+                self.state.position,
+                self.state.inventory.get(agent_id),
+                frozenset(self.state.locked.items()),  # adds door/lock awareness
+                frozenset(
+                    self.state.collectible.items()
+                ),  # adds collectibles awareness
+            )
+        )
 
 
 MOVE_ACTIONS = [
@@ -210,10 +225,12 @@ class Agent:
             collectible_ids = entities_with_components_at(
                 node.state, Position(agent_pos_x, agent_pos_y), node.state.collectible
             )
+            if node.check_inventory():
+                print("FUKKKKKKKKK")
 
             for action in MOVE_ACTIONS:
                 if (
-                    (action == Action.PICK_UP and collectible_ids)
+                    (action == Action.PICK_UP and len(collectible_ids) > 0)
                     or (
                         action == Action.USE_KEY
                         and node.check_inventory()
@@ -231,6 +248,7 @@ class Agent:
 
     def find_base_action(self, end_nodes: "List[Node]") -> "Action":
         if len(end_nodes) == 0:
+            print("YOU DID NOT FIND ANYTHING BRO")
             random.seed(time.time_ns())
             return random.choice(MOVE_ACTIONS)
 
@@ -245,6 +263,7 @@ class Agent:
 
         if lst_action is None:
             random.seed(time.time_ns())
+            print("YOU DID NOT FIND ANYTHING BRO")
             return random.choice(MOVE_ACTIONS)
 
         return lst_action
@@ -257,7 +276,7 @@ class Agent:
             return Action.DOWN
         elif isinstance(state, Level):
             self.time_limit = 25
-            self.step_limit = 15
+            self.step_limit = 20
 
             action: Action
 
