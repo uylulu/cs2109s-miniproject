@@ -71,11 +71,75 @@ def render_state(state: State) -> None:
         subprocess.run(["kitty", "+kitten", "icat", tmp.name])
 
 
-CURRENT_LEVEL: int = 7
+CURRENT_LEVEL: int = 4
 
 
 def generate_state() -> State:
-    if CURRENT_LEVEL == 5:
+    if CURRENT_LEVEL == 3:
+        level = Level(
+            width=9,
+            height=7,
+            move_fn=default_move_fn,  # choose movement semantics
+            objective_fn=default_objective_fn,  # win when collecting all cores and standing on exit
+            seed=14,  # for reproducibility
+        )
+
+        # 2) Layout: floors, then place objects
+        for y in range(level.height):
+            for x in range(level.width):
+                level.add((x, y), create_floor())
+
+                if y == 0 or y == level.height - 1 or x == 0 or x == level.width - 1:
+                    level.add((x, y), create_wall())
+
+        level.add((1, 1), create_agent(health=5))
+        level.add((7, 5), create_exit())
+
+        level.add((4, 1), create_wall())
+        level.add((4, 2), create_wall())
+        level.add((4, 4), create_wall())
+        level.add((4, 5), create_wall())
+
+        level.add((3, 2), create_core())
+
+        # 3) Convert to runtime State (immutable)
+        state = to_state(level)
+        return state
+    elif CURRENT_LEVEL == 4:
+        level = Level(
+            width=11,
+            height=9,
+            move_fn=default_move_fn,  # choose movement semantics
+            objective_fn=default_objective_fn,  # win when collecting all cores and standing on exit
+            seed=15,  # for reproducibility
+        )
+
+        # 2) Layout: floors, then place objects
+        for y in range(level.height):
+            for x in range(level.width):
+                level.add((x, y), create_floor())
+
+                if y == 0 or y == level.height - 1 or x == 0 or x == level.width - 1:
+                    level.add((x, y), create_wall())
+
+        level.add((1, 4), create_agent(health=5))
+        level.add((9, 4), create_exit())
+
+        level.add((5, 1), create_core())
+        level.add((5, 7), create_core())
+
+        for y in range(1, 8):
+            for x in range(1, 10):
+                if y == 4 or x == 5:
+                    continue
+
+                level.add((x, y), create_wall())
+
+        # 3) Convert to runtime State (immutable)
+        state = to_state(level)
+        return state
+
+    elif CURRENT_LEVEL == 5:
         level = Level(
             width=11,
             height=9,
