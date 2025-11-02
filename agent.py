@@ -134,16 +134,11 @@ MOVE_ACTIONS = [
 
 
 class Agent:
-    distance: "dict[Node, int]" = {}
-    good_action: "dict[Node, Action | None]" = {}
-    step_limit: int = 0
-    current_state: "State | None" = None
-
     def __init__(self):
         self.distance: "dict[Node, int]" = {}
-        self.good_action: "dict[Node, Action | None]" = {}
+        self.good_action: "dict[Node, Action]" = {}
         self.step_limit: int = 0
-        self.current_state = None
+        self.current_state: "State | None" = None
 
     def get_exit_position(self, state: "State") -> tuple[int, int]:
         exit_id = next(iter(state.exit.keys()))
@@ -172,13 +167,15 @@ class Agent:
         vis: dict[Node, bool] = {}
 
         initial_node = Node(state, None, None, 0)
+        if initial_node in self.good_action:
+            return self.good_action[initial_node]
+
         pq.put(initial_node)
 
         end_nodes: "List[Node]" = []
 
         while not pq.empty():
             node = pq.get()
-
             if node in vis:
                 continue
 
@@ -221,6 +218,7 @@ class Agent:
         curr_node = best
         while curr_node.parent_action is not None and curr_node.parent_node is not None:
             lst_action = curr_node.parent_action
+            self.good_action[curr_node.parent_node] = lst_action
             curr_node = curr_node.parent_node
 
         if lst_action is None:
@@ -233,8 +231,6 @@ class Agent:
         if not isinstance(state, Level):
             return Action.DOWN
         elif isinstance(state, Level):
-            self.distance: "dict[Node, int]" = {}
-            self.good_action: "dict[Node, Action | None]" = {}
             self.step_limit = 8
 
             action: Action
