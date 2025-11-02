@@ -60,6 +60,8 @@ renderer_large = TextureRenderer(resolution=480, asset_root=ASSET_ROOT)
 from agent import Agent
 from grid_universe.levels.factories import create_core
 from grid_universe.levels.grid import Level
+from grid_universe.levels.factories import create_door, create_key
+from grid_universe.levels.factories import create_portal
 
 
 def render_state(state: State) -> None:
@@ -69,39 +71,65 @@ def render_state(state: State) -> None:
         subprocess.run(["kitty", "+kitten", "icat", tmp.name])
 
 
+CURRENT_LEVEL: int = 7
+
+
 def generate_state() -> State:
-    # COPY YOUR STATE CODE HERE
-    level = Level(
-        width=9,
-        height=7,
-        move_fn=default_move_fn,  # choose movement semantics
-        objective_fn=default_objective_fn,  # win when collecting all cores and standing on exit
-        seed=14,  # for reproducibility
-    )
+    if CURRENT_LEVEL == 5:
+        level = Level(
+            width=11,
+            height=9,
+            move_fn=default_move_fn,  # choose movement semantics
+            objective_fn=exit_objective_fn,  # win when stand on exit
+            seed=16,  # for reproducibility
+        )
 
-    # 2) Layout: floors, then place objects
-    for y in range(level.height):
-        for x in range(level.width):
-            level.add((x, y), create_floor())
+        # 2) Layout: floors, then place objects
+        for y in range(level.height):
+            for x in range(level.width):
+                level.add((x, y), create_floor())
 
-            if y == 0 or y == level.height - 1 or x == 0 or x == level.width - 1:
-                level.add((x, y), create_wall())
+                if x == 5 and y != 4:
+                    level.add((x, y), create_wall())
 
-    level.add((1, 1), create_agent(health=5))
-    level.add((7, 5), create_exit())
+        level.add((1, 4), create_agent(health=5))
+        level.add((9, 4), create_exit())
 
-    level.add((4, 1), create_wall())
-    level.add((4, 2), create_wall())
-    level.add((4, 4), create_wall())
-    level.add((4, 5), create_wall())
+        level.add((5, 4), create_door(key_id="my_key"))
+        level.add((2, 3), create_key(key_id="my_key"))
 
-    level.add((3, 2), create_core())
+        # 3) Convert to runtime State (immutable)
+        state = to_state(level)
+        return state
+    elif CURRENT_LEVEL == 7:
+        level = Level(
+            width=11,
+            height=9,
+            move_fn=default_move_fn,  # choose movement semantics
+            objective_fn=exit_objective_fn,  # win when stand on exit
+            seed=17,  # for reproducibility
+        )
 
-    # 3) Convert to runtime State (immutable)
-    state = to_state(level)
-    renderer_large.render(state)
+        # 2) Layout: floors, then place objects
+        for y in range(level.height):
+            for x in range(level.width):
+                level.add((x, y), create_floor())
 
-    return state
+                if 3 <= x <= 7 and y == 3:
+                    level.add((x, y), create_wall())
+
+        level.add((1, 4), create_agent(health=5))
+        level.add((9, 4), create_exit())
+
+        portal = create_portal()
+        level.add((2, 1), portal)
+        level.add((10, 4), create_portal(pair=portal))
+
+        # 3) Convert to runtime State (immutable)
+        state = to_state(level)
+        return state
+
+    raise RuntimeError("Cannot find level")
 
 
 MAX_NUMBER_OF_STEPS: int = 50

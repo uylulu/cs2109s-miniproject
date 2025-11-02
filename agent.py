@@ -7,10 +7,10 @@ from grid_universe.state import State
 from grid_universe.actions import Action
 from grid_universe.levels.grid import Level
 
-from grid_universe.step import step
+from grid_universe.step import EntityID, step
 from grid_universe.levels.convert import to_state, from_state
 
-from grid_universe.components.properties import Position
+from grid_universe.components.properties import Position, inventory
 from grid_universe.levels.convert import _entity_object_from_state
 from grid_universe.utils.ecs import entities_with_components_at
 
@@ -48,11 +48,33 @@ class Node:
     def manhatan_dis(self, pos_1: tuple[int, int], pos_2: tuple[int, int]):
         return abs(pos_1[0] - pos_2[0]) + abs(pos_1[1] - pos_2[1])
 
+    def get_agent_id(self) -> EntityID:
+        return next(iter(self.state.agent.keys()))
+
+    def check_locks(self) -> bool:
+        agent_id = self.get_agent_id()
+        pos = self.state.position.get(agent_id)
+        if pos is not None:
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                adjacent = Position(pos.x + dx, pos.y + dy)
+                locked_items = entities_with_components_at(
+                    self.state, adjacent, self.state.locked
+                )
+                if len(locked_items) > 0:
+                    return True
+
+        return False
+
+    def check_inventory(self) -> bool:
+        agent_id = self.get_agent_id()
+
+        return self.state.inventory.get(agent_id) is not None
+
     def get_cores(self) -> "List[tuple[int, int]]":
         collectibles = self.state.collectible
         cores: "List[tuple[int, int]]" = []
 
-        for key, item in collectibles.items():
+        for key, _ in collectibles.items():
             entity_spec = _entity_object_from_state(self.state, key)
             if entity_spec.required is not None:
                 position = self.state.position.get(key)
@@ -101,7 +123,14 @@ class Node:
         return hash((self.state.position))
 
 
-MOVE_ACTIONS = [Action.UP, Action.DOWN, Action.LEFT, Action.RIGHT, Action.PICK_UP]
+MOVE_ACTIONS = [
+    Action.UP,
+    Action.DOWN,
+    Action.LEFT,
+    Action.RIGHT,
+    Action.PICK_UP,
+    Action.USE_KEY,
+]
 
 
 class Agent:
@@ -159,20 +188,25 @@ class Agent:
             if self.is_end_node(node):
                 end_nodes.append(node)
                 continue
+
             collectible_ids = entities_with_components_at(
                 node.state, Position(agent_pos_x, agent_pos_y), node.state.collectible
             )
 
             for action in MOVE_ACTIONS:
-                if action != Action.PICK_UP:
+                if (
+                    (action == Action.PICK_UP and collectible_ids)
+                    or (
+                        action == Action.USE_KEY
+                        and node.check_inventory()
+                        and node.check_locks()
+                    )
+                    or (action not in (Action.PICK_UP, Action.USE_KEY))
+                ):
                     new_state = node.step(action)
                     new_node = Node(new_state, node, action, node.current_step + 1)
-                    pq.put(new_node)
-
-                elif action == Action.PICK_UP and len(collectible_ids) > 0:
-                    new_state = node.step(action)
-                    new_node = Node(new_state, node, action, node.current_step + 1)
-                    pq.put(new_node)
+                    if new_node not in vis:
+                        pq.put(new_node)
 
         return self.find_base_action(end_nodes)
 
@@ -201,7 +235,7 @@ class Agent:
         elif isinstance(state, Level):
             self.distance: "dict[Node, int]" = {}
             self.good_action: "dict[Node, Action | None]" = {}
-            self.step_limit = 5
+            self.step_limit = 8
 
             action: Action
 
@@ -214,5 +248,3 @@ class Agent:
                 self.current_state = step(self.current_state, action)
 
             return action
-
-        return Action.DOWN
