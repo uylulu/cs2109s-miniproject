@@ -1,3 +1,4 @@
+from os import stat
 import subprocess
 import tempfile
 
@@ -71,11 +72,24 @@ def render_state(state: State) -> None:
         subprocess.run(["kitty", "+kitten", "icat", tmp.name])
 
 
-CURRENT_LEVEL: int = 5
+from enum import Enum, auto
+
+
+class TestLevel[Enum]:
+    Level_3 = 1
+    Level_4 = auto()
+    Level_5 = auto()
+    Level_7 = auto()
+    Level_8_1 = auto()
+    Level_8_2 = auto()
+    Level_8_3 = auto()
+
+
+CURRENT_LEVEL: int = TestLevel.Level_8_3
 
 
 def generate_state() -> State:
-    if CURRENT_LEVEL == 3:
+    if CURRENT_LEVEL == TestLevel.Level_3:
         level = Level(
             width=9,
             height=7,
@@ -105,7 +119,7 @@ def generate_state() -> State:
         # 3) Convert to runtime State (immutable)
         state = to_state(level)
         return state
-    elif CURRENT_LEVEL == 4:
+    elif CURRENT_LEVEL == TestLevel.Level_4:
         level = Level(
             width=11,
             height=9,
@@ -139,7 +153,7 @@ def generate_state() -> State:
         state = to_state(level)
         return state
 
-    elif CURRENT_LEVEL == 5:
+    elif CURRENT_LEVEL == TestLevel.Level_5:
         level = Level(
             width=11,
             height=9,
@@ -165,7 +179,7 @@ def generate_state() -> State:
         # 3) Convert to runtime State (immutable)
         state = to_state(level)
         return state
-    elif CURRENT_LEVEL == 7:
+    elif CURRENT_LEVEL == TestLevel.Level_7:
         level = Level(
             width=11,
             height=9,
@@ -188,6 +202,91 @@ def generate_state() -> State:
         portal = create_portal()
         level.add((2, 1), portal)
         level.add((10, 4), create_portal(pair=portal))
+
+        # 3) Convert to runtime State (immutable)
+        state = to_state(level)
+        return state
+    elif CURRENT_LEVEL == TestLevel.Level_8_1:
+        from grid_universe.levels.factories import create_box
+        from grid_universe.components.properties import MovingAxis
+
+        level = Level(
+            3, 3, move_fn=default_move_fn, objective_fn=exit_objective_fn, seed=18
+        )
+        for y in range(3):
+            for x in range(3):
+                level.add((x, y), create_floor())
+
+        for y, x in ((0, 0), (0, 2), (2, 0), (2, 2)):
+            level.add((x, y), create_wall())
+
+        level.add((1, 0), create_agent())
+        level.add((1, 2), create_exit())
+
+        box = create_box(
+            pushable=False,
+            moving_axis=MovingAxis.HORIZONTAL,
+            moving_direction=1,
+            moving_bounce=True,
+            moving_speed=1,
+        )
+
+        level.add((1, 1), box)
+
+        state = to_state(level)
+        return state
+    elif CURRENT_LEVEL == TestLevel.Level_8_2:
+        from grid_universe.levels.factories import create_box
+        from grid_universe.components.properties.moving import MovingAxis
+
+        level = Level(
+            8, 1, move_fn=default_move_fn, objective_fn=exit_objective_fn, seed=19
+        )
+        for y in range(8):
+            for x in range(1):
+                level.add((y, x), create_floor())
+
+        portal = create_portal()
+
+        level.add((0, 0), create_agent())
+        level.add((1, 0), create_box())
+        level.add((2, 0), portal)
+        level.add((6, 0), create_portal(pair=portal))
+        level.add((3, 0), create_exit())
+
+        box = create_box(
+            pushable=False,
+            moving_axis=MovingAxis.HORIZONTAL,
+            moving_direction=1,
+            moving_bounce=True,
+            moving_speed=1,
+        )
+
+        state = to_state(level)
+        return state
+    elif CURRENT_LEVEL == TestLevel.Level_8_3:
+        from grid_universe.levels.factories import create_box
+        from grid_universe.components.properties.moving import MovingAxis
+
+        level = Level(
+            width=11,
+            height=9,
+            move_fn=default_move_fn,  # choose movement semantics
+            objective_fn=exit_objective_fn,  # win when stand on exit
+            seed=20,  # for reproducibility
+        )
+
+        # 2) Layout: floors, then place objects
+        for y in range(level.height):
+            for x in range(level.width):
+                level.add((x, y), create_floor())
+
+                if x == 5 and y != 4:
+                    level.add((x, y), create_wall())
+
+        level.add((1, 4), create_agent(health=5))
+        level.add((9, 4), create_exit())
+        level.add((4, 4), create_box())
 
         # 3) Convert to runtime State (immutable)
         state = to_state(level)

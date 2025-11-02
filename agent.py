@@ -130,6 +130,7 @@ MOVE_ACTIONS = [
     Action.RIGHT,
     Action.PICK_UP,
     Action.USE_KEY,
+    Action.WAIT,
 ]
 
 
@@ -188,11 +189,13 @@ class Agent:
         pq.put(initial_node)
 
         print("EXPLORING")
+        cnt: int = 0
 
         vis: dict[Node, bool] = {}
         end_nodes: "List[Node]" = []
         while not pq.empty():
             node = pq.get()
+            cnt += 1
             if node in vis:
                 continue
             agent_pos_x, agent_pos_y = node.get_agent_pos()
@@ -220,7 +223,7 @@ class Agent:
                     new_node = Node(new_state, node, action, node.current_step + 1)
                     if new_node not in vis:
                         pq.put(new_node)
-
+        print("number of nodes", cnt)
         self.steps_left = self.step_limit
         return self.find_base_action(end_nodes)
 
