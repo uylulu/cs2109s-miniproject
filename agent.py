@@ -90,7 +90,7 @@ class Node:
         return cores
 
     def f(self):
-        return self.heuristic() - self.state.score
+        return 3 * self.heuristic() - self.state.score
 
     def heuristic(self):
         cores = self.get_cores()
