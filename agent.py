@@ -5,6 +5,7 @@ import random
 import time
 from typing import List
 from queue import PriorityQueue
+from IPython.display import display
 from grid_universe.moves import default_move_fn
 from grid_universe.state import State
 from grid_universe.actions import Action
@@ -201,6 +202,62 @@ FLOOR_TILE_COST: int = 3
 COIN_REWARD: int = 5
 COIRE_REWARD: int = 0
 
+# Asset root for rendering. You can change this if you want to use custom game assets.
+ASSET_ROOT = "data/assets/"
+
+# Unified imports for Grid Universe tutorial (run this cell first)
+from typing import List, Tuple
+
+# Core API
+from grid_universe.levels.grid import Level
+from grid_universe.state import State
+from grid_universe.levels.convert import to_state, from_state
+from grid_universe.actions import Action
+from grid_universe.step import step
+
+# Factories
+from grid_universe.levels.factories import (
+    create_floor,
+    create_agent,
+    create_box,
+    create_coin,
+    create_exit,
+    create_wall,
+    create_key,
+    create_door,
+    create_portal,
+    create_core,
+    create_hazard,
+    create_monster,
+    create_phasing_effect,
+    create_speed_effect,
+    create_immunity_effect,
+)
+
+# Movement and objectives
+from grid_universe.moves import default_move_fn
+from grid_universe.objectives import (
+    exit_objective_fn,
+    default_objective_fn,
+    all_pushable_at_exit_objective_fn,
+    all_unlocked_objective_fn,
+)
+
+# Components and enums
+from grid_universe.components.properties import Moving
+from grid_universe.components.properties.moving import MovingAxis
+from grid_universe.components.properties.appearance import AppearanceName
+from grid_universe.components.properties.pathfinding import PathfindingType
+
+# Rendering and display
+from grid_universe.renderer.texture import TextureRenderer
+from IPython.display import display
+from grid_universe.levels.factories import create_wall
+
+# Default renderer used throughout the notebook unless overridden in a cell
+renderer = TextureRenderer(resolution=240, asset_root=ASSET_ROOT)
+renderer_large = TextureRenderer(resolution=480, asset_root=ASSET_ROOT)
+
 
 class Agent:
     def __init__(self):
@@ -322,7 +379,6 @@ class Agent:
             return
 
     def parse_image(self, state: "Observation") -> "Level":
-        print("PARSEING HERE")
         width = state["info"]["config"]["width"]
         height = state["info"]["config"]["height"]
 
@@ -338,7 +394,6 @@ class Agent:
         else:
             self.ciphertext_decoder = CiphertextDecoder()
             self.objective = self.ciphertext_decoder.predict(state["info"]["message"])
-
         res_level = Level(
             ### CONFIG Info
             width=width,
@@ -350,35 +405,31 @@ class Agent:
             seed=state["info"]["config"]["seed"],
             turn_limit=state["info"]["config"]["turn_limit"],
         )
+        for i in range(height):
+            for j in range(width):
+                y0 = i * grid_box_height
+                y1 = (i + 1) * grid_box_height
+                x0 = j * grid_box_width
+                x1 = (j + 1) * grid_box_width
 
-        print("TRYING TO PARSE IMAGE")
-        for i in range(0, height):
-            for j in range(0, width):
-                print(i, i + grid_box_height, j, j + grid_box_width, 3)
-                grid_box = image[i : i + grid_box_height, j : j + grid_box_width, :3]
+                grid_box = image[y0:y1, x0:x1, :]
                 image_box = Image.fromarray(grid_box)
-                print("IM HERE")
                 pred = self.image_model.predict(image_box)
-
                 if pred == "human":
-                    res_level.add(
-                        (j, i), create_agent(health=agent_info["health"]["health"])
-                    )
+                    res_level.add((j, i), create_agent(agent_info["health"]["health"]))
+                elif pred == "wall":
+                    res_level.add((j, i), create_wall())
+                elif pred == "floor":
+                    res_level.add((j, i), create_floor(FLOOR_TILE_COST))
                 elif pred == "exit":
                     res_level.add((j, i), create_exit())
-                elif pred == "floor":
-                    res_level.add((j, i), create_floor(cost_amount=FLOOR_TILE_COST))
                 else:
-                    image_box.save("fucked.png")
-                    print("WHAT IS THIS", pred)
-                    # TODO: CHANGE THIS TO CREATE A NEW FLOOR
-                    raise RuntimeError(
-                        "Cannot parse this shit because I havent implemented it"
-                    )
-
+                    raise RuntimeError("I DONT KNOW WHAT THIS IS {}".format(pred))
         return res_level
 
     def step(self, state: "Level | Observation") -> "Action":
+        self.time_limit = 25
+        self.step_limit = 20
         if not isinstance(state, Level):
             if self.current_state is not None:
                 action = self.astar(self.current_state)
@@ -389,8 +440,8 @@ class Agent:
             self.image_model = ImageClassify()
             current_level = self.parse_image(state)
             self.current_state = to_state(current_level)
-
             action = self.astar(self.current_state)
+            print(action)
             self.current_state = step(self.current_state, action)
             return action
         elif isinstance(state, Level):
