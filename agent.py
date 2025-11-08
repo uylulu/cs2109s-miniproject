@@ -8,12 +8,39 @@ from grid_universe.state import State
 from grid_universe.actions import Action
 from grid_universe.levels.grid import Level
 
+from grid_universe.objectives import (
+    exit_objective_fn,
+    default_objective_fn,
+)
+from ciphertext.ciphertext_decoder import CiphertextDecoder
+from image_classification.image_classification import ImageClassify
+
+
 from grid_universe.step import EntityID, step
 from grid_universe.levels.convert import to_state, from_state
 
 from grid_universe.components.properties import Position, inventory
 from grid_universe.levels.convert import _entity_object_from_state
 from grid_universe.utils.ecs import entities_with_components_at
+
+# Factories
+from grid_universe.levels.factories import (
+    create_floor,
+    create_agent,
+    create_box,
+    create_coin,
+    create_exit,
+    create_wall,
+    create_key,
+    create_door,
+    create_portal,
+    create_core,
+    create_hazard,
+    create_monster,
+    create_phasing_effect,
+    create_speed_effect,
+    create_immunity_effect,
+)
 
 # Core API
 from grid_universe.gym_env import Observation
@@ -22,12 +49,6 @@ import torch
 from torch import Tensor, nn
 
 CIPHER_TEXT_MODEL_PATH = "ciphertext-model"
-from grid_universe.objectives import (
-    exit_objective_fn,
-    default_objective_fn,
-)
-from ciphertext.ciphertext_decoder import CiphertextDecoder
-from image_classification.image_classification import ImageClassify
 
 
 class Node:
@@ -169,6 +190,12 @@ MOVE_ACTIONS = [
     Action.USE_KEY,
     Action.WAIT,
 ]
+POWERUP_DURATION: int = 5
+HAZARDS_DAMMAGE: int = 2
+ENEMIES_DAMAGE: int = 1
+FLOOR_TILE_COST: int = 3
+COIN_REWARD: int = 5
+COIRE_REWARD: int = 0
 
 
 class Agent:
@@ -285,6 +312,10 @@ class Agent:
 
     def get_time_left(self) -> float:
         return self.time_limit - (time.time() - self.base_time)
+
+    def get_object_from_pred(self, pred: str, x: int, y: int):
+        if pred == "boots":
+            return
 
     def parse_image(self, state: "Observation") -> "Level":
         width = state["info"]["config"]["width"]
