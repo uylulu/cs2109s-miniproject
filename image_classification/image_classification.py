@@ -24,9 +24,6 @@ def get_model(device: str = "cpu", dtype: str | None = None):
     m.eval()
     return m
 
-
-
-
 class ImageClassify:
     def __init__(self):
         self.label_mapping: list[str] = [
