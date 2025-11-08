@@ -1,4 +1,6 @@
+# image_box = Image.froim = Image.fromarray(np.uint8(cm.gist_earth(myarray)*255))m
 # Unified imports for Grid Universe tutorial (run this cell first)
+from math import inf
 import random
 import time
 from typing import List
@@ -7,11 +9,13 @@ from grid_universe.moves import default_move_fn
 from grid_universe.state import State
 from grid_universe.actions import Action
 from grid_universe.levels.grid import Level
+from PIL import Image
 
 from grid_universe.objectives import (
     exit_objective_fn,
     default_objective_fn,
 )
+from numpy import info
 from ciphertext.ciphertext_decoder import CiphertextDecoder
 from image_classification.classification_lib.image_classification import ImageClassify
 
@@ -318,44 +322,77 @@ class Agent:
             return
 
     def parse_image(self, state: "Observation") -> "Level":
+        print("PARSEING HERE")
         width = state["info"]["config"]["width"]
         height = state["info"]["config"]["height"]
 
         image = state["image"]
-        image_height, image_width = image.shape
-        grid_box_height, grid_box_width = image_height / height, image_width / width
+        image_height, image_width, channel_size = image.shape
+        grid_box_height, grid_box_width = image_height // height, image_width // width
 
-        if state["info"]["config"]["objective_fn"] == "default":
+        agent_info = state["info"]["agent"]
+        if state["info"]["config"]["objective_fn"] == "default_objective_fn":
             self.objective = "default"
-        elif state["info"]["config"]["objective_fn"] == "exit":
+        elif state["info"]["config"]["objective_fn"] == "exit_objective_fn":
             self.objective = "exit"
         else:
             self.ciphertext_decoder = CiphertextDecoder()
             self.objective = self.ciphertext_decoder.predict(state["info"]["message"])
 
         res_level = Level(
+            ### CONFIG Info
             width=width,
             height=height,
             move_fn=default_move_fn,
             objective_fn=default_objective_fn
             if self.objective == "default"
             else exit_objective_fn,
+            seed=state["info"]["config"]["seed"],
+            turn_limit=state["info"]["config"]["turn_limit"],
         )
 
+        print("TRYING TO PARSE IMAGE")
         for i in range(0, height):
             for j in range(0, width):
+                print(i, i + grid_box_height, j, j + grid_box_width, 3)
                 grid_box = image[i : i + grid_box_height, j : j + grid_box_width, :3]
-                x = torch.Tensor(
-                    grid_box,
-                )
-                pred = self.image_model.predict(x)
+                image_box = Image.fromarray(grid_box)
+                print("IM HERE")
+                pred = self.image_model.predict(image_box)
 
-                # if
+                if pred == "human":
+                    res_level.add(
+                        (j, i), create_agent(health=agent_info["health"]["health"])
+                    )
+                elif pred == "exit":
+                    res_level.add((j, i), create_exit())
+                elif pred == "floor":
+                    res_level.add((j, i), create_floor(cost_amount=FLOOR_TILE_COST))
+                else:
+                    image_box.save("fucked.png")
+                    print("WHAT IS THIS", pred)
+                    # TODO: CHANGE THIS TO CREATE A NEW FLOOR
+                    raise RuntimeError(
+                        "Cannot parse this shit because I havent implemented it"
+                    )
+
+        return res_level
 
     def step(self, state: "Level | Observation") -> "Action":
         if not isinstance(state, Level):
+            if self.current_state is not None:
+                action = self.astar(self.current_state)
+                self.current_state = step(self.current_state, action)
+
+                return action
+
             self.image_model = ImageClassify()
-            return Action.DOWN
+            current_level = self.parse_image(state)
+            self.current_state = to_state(current_level)
+
+            action = self.astar(self.current_state)
+            self.current_state = step(self.current_state, action)
+            return action
         elif isinstance(state, Level):
             self.time_limit = 25
             self.step_limit = 20

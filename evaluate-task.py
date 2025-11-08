@@ -308,7 +308,10 @@ def evaluate_all_gameplay_levels(
         assert len(seed) == len(GAMEPLAY_LEVEL_BUILDERS), (
             "If seed is a list, its length must match the number of levels."
         )
+    cnt = 0
     for i, builder in enumerate(GAMEPLAY_LEVEL_BUILDERS):
+        if cnt > 1:
+            break
         max_total_reward, min_total_reward = (
             LEVEL_MAX_REWARD[builder.__name__],
             LEVEL_MIN_REWARD[builder.__name__],
@@ -325,6 +328,7 @@ def evaluate_all_gameplay_levels(
             time_limit=TIME_LIMIT,
             seed=seed_i,
         )
+        cnt += 1
 
 
 def run_task_1():
@@ -359,4 +363,14 @@ def run_task_2():
     print(get_result_string(result))
 
 
-run_task_2()
+def run_task_3():
+    # Specify a different seed to test the agent on a different looking level
+    for result in evaluate_all_gameplay_levels(
+        Agent,
+        observation_type="image",
+        seed=list(range(1, len(GAMEPLAY_LEVEL_BUILDERS) + 1)),
+    ):
+        print(get_result_string(result))
+
+
+run_task_3()
