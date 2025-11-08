@@ -13,7 +13,7 @@ from grid_universe.objectives import (
     default_objective_fn,
 )
 from ciphertext.ciphertext_decoder import CiphertextDecoder
-from image_classification.image_classification import ImageClassify
+from image_classification.classification_lib.image_classification import ImageClassify
 
 
 from grid_universe.step import EntityID, step
