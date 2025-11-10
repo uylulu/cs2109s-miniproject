@@ -1,7 +1,7 @@
 # Asset root for rendering. You can change this if you want to use custom game assets.
 ASSET_ROOT = "data/assets/"
 
-from agent import Agent
+from agent_submission import Agent
 
 # Unified imports for Grid Universe tutorial (run this cell first)
 from typing import List, Tuple
@@ -308,10 +308,7 @@ def evaluate_all_gameplay_levels(
         assert len(seed) == len(GAMEPLAY_LEVEL_BUILDERS), (
             "If seed is a list, its length must match the number of levels."
         )
-    cnt = 0
     for i, builder in enumerate(GAMEPLAY_LEVEL_BUILDERS):
-        if cnt > 0:
-            break
         max_total_reward, min_total_reward = (
             LEVEL_MAX_REWARD[builder.__name__],
             LEVEL_MIN_REWARD[builder.__name__],
@@ -328,7 +325,6 @@ def evaluate_all_gameplay_levels(
             time_limit=TIME_LIMIT,
             seed=seed_i,
         )
-        cnt += 1
 
 
 def run_task_1():
@@ -365,16 +361,39 @@ def run_task_2():
 
 def run_task_3():
     # Specify a different seed to test the agent on a different looking level
-    cnt = 0
     for result in evaluate_all_gameplay_levels(
         Agent,
         observation_type="image",
         seed=list(range(1, len(GAMEPLAY_LEVEL_BUILDERS) + 1)),
     ):
-        if cnt > 0:
-            break
         print(get_result_string(result))
-        cnt += 1
+
+
+def run_task_4():
+    result = evaluate_level(
+        Agent,
+        build_level_capstone,
+        observation_type="level",
+        max_total_reward=-84,
+        min_total_reward=LEVEL_MIN_REWARD[build_level_capstone.__name__],
+        cipher_text_pairs=CIPHER_TEXT_PAIRS,
+        turn_limit=LEVEL_TURN_LIMIT,
+        time_limit=CAPSTONE_TIME_LIMIT,
+        seed=1,
+    )
+    print(get_result_string(result))
+    result = evaluate_level(
+        Agent,
+        build_level_capstone,
+        observation_type="image",
+        max_total_reward=-63,
+        min_total_reward=LEVEL_MIN_REWARD[build_level_capstone.__name__],
+        cipher_text_pairs=CIPHER_TEXT_PAIRS,
+        turn_limit=LEVEL_TURN_LIMIT,
+        time_limit=CAPSTONE_TIME_LIMIT,
+        seed=2,
+    )
+    print(get_result_string(result))
 
 
 run_task_3()

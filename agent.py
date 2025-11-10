@@ -1,30 +1,28 @@
-# image_box = Image.froim = Image.fromarray(np.uint8(cm.gist_earth(myarray)*255))m
-# Unified imports for Grid Universe tutorial (run this cell first)
-from math import inf
 import random
 import time
 from typing import List
 from queue import PriorityQueue
-from IPython.display import display
 from grid_universe.moves import default_move_fn
 from grid_universe.state import State
 from grid_universe.actions import Action
-from grid_universe.levels.grid import Level
+from grid_universe.levels.grid import EntitySpec, Level
 from PIL import Image
 
 from grid_universe.objectives import (
     exit_objective_fn,
     default_objective_fn,
 )
-from numpy import info
-from ciphertext.ciphertext_decoder import CiphertextDecoder
-from image_classification.classification_lib.image_classification import ImageClassify
+# from ciphertext.ciphertext_decoder import CiphertextDecoder
+# from image_classification.classification_lib.image_classification import ImageClassify
+# from image_classification.classification_lib.direction_classfication import (
+#     DirectionClassify,
+# )
 
 
 from grid_universe.step import EntityID, step
-from grid_universe.levels.convert import to_state, from_state
+from grid_universe.levels.convert import to_state
 
-from grid_universe.components.properties import Position, inventory
+from grid_universe.components.properties import Position
 from grid_universe.levels.convert import _entity_object_from_state
 from grid_universe.utils.ecs import entities_with_components_at
 
@@ -49,9 +47,6 @@ from grid_universe.levels.factories import (
 
 # Core API
 from grid_universe.gym_env import Observation
-
-import torch
-from torch import Tensor, nn
 
 CIPHER_TEXT_MODEL_PATH = "ciphertext-model"
 
@@ -203,62 +198,14 @@ COIN_REWARD: int = 5
 COIRE_REWARD: int = 0
 
 # Asset root for rendering. You can change this if you want to use custom game assets.
-ASSET_ROOT = "data/assets/"
-
-# Unified imports for Grid Universe tutorial (run this cell first)
-from typing import List, Tuple
-
-# Core API
-from grid_universe.levels.grid import Level
-from grid_universe.state import State
-from grid_universe.levels.convert import to_state, from_state
-from grid_universe.actions import Action
-from grid_universe.step import step
-
-# Factories
-from grid_universe.levels.factories import (
-    create_floor,
-    create_agent,
-    create_box,
-    create_coin,
-    create_exit,
-    create_wall,
-    create_key,
-    create_door,
-    create_portal,
-    create_core,
-    create_hazard,
-    create_monster,
-    create_phasing_effect,
-    create_speed_effect,
-    create_immunity_effect,
-)
-
-# Movement and objectives
-from grid_universe.moves import default_move_fn
-from grid_universe.objectives import (
-    exit_objective_fn,
-    default_objective_fn,
-    all_pushable_at_exit_objective_fn,
-    all_unlocked_objective_fn,
-)
-
-# Components and enums
-from grid_universe.components.properties import Moving
 from grid_universe.components.properties.moving import MovingAxis
 from grid_universe.components.properties.appearance import AppearanceName
-from grid_universe.components.properties.pathfinding import PathfindingType
 
 # Rendering and display
 from grid_universe.renderer.texture import TextureRenderer
-from IPython.display import display
-from grid_universe.levels.factories import create_wall
+
 
 # Default renderer used throughout the notebook unless overridden in a cell
-renderer = TextureRenderer(resolution=240, asset_root=ASSET_ROOT)
-renderer_large = TextureRenderer(resolution=480, asset_root=ASSET_ROOT)
-
-
 class Agent:
     def __init__(self):
         self.distance: "dict[Node, int]" = {}
@@ -271,6 +218,7 @@ class Agent:
         self.steps_left: int = (
             0  # records the number of steps left that we have explored
         )
+        self.max_steps_left: int = 0
 
     def get_exit_position(self, state: "State") -> tuple[int, int]:
         exit_id = next(iter(state.exit.keys()))
@@ -297,7 +245,7 @@ class Agent:
     # Stochastic function to decide whether to explore or exploit
     def can_exploit(self) -> bool:
         # time_left = self.get_time_left()
-        return self.steps_left >= self.step_limit / 2
+        return self.steps_left > self.max_steps_left / 2
 
     def astar(self, state: "State"):
         initial_node = Node(state, None, None, 0, self.objective)
@@ -308,6 +256,7 @@ class Agent:
 
         self.good_action: "dict[Node, Action]" = {}
         self.steps_left = 0
+        self.max_steps_left = 0
 
         pq: PriorityQueue[Node] = PriorityQueue()
         pq.put(initial_node)
@@ -326,6 +275,8 @@ class Agent:
             vis[node] = True
             if self.is_end_node(node):
                 end_nodes.append(node)
+                if node.state.win or len(end_nodes) >= 4:
+                    break
                 continue
 
             collectible_ids = entities_with_components_at(
@@ -360,6 +311,7 @@ class Agent:
         lst_action: "Action | None" = None
 
         curr_node = best
+        self.max_steps_left = curr_node.current_step
         while curr_node.parent_action is not None and curr_node.parent_node is not None:
             lst_action = curr_node.parent_action
             self.good_action[curr_node.parent_node] = lst_action
@@ -373,10 +325,6 @@ class Agent:
 
     def get_time_left(self) -> float:
         return self.time_limit - (time.time() - self.base_time)
-
-    def get_object_from_pred(self, pred: str, x: int, y: int):
-        if pred == "boots":
-            return
 
     def parse_image(self, state: "Observation") -> "Level":
         width = state["info"]["config"]["width"]
@@ -405,6 +353,8 @@ class Agent:
             seed=state["info"]["config"]["seed"],
             turn_limit=state["info"]["config"]["turn_limit"],
         )
+        portal_count = 0
+        lst_portal: None | EntitySpec = None
         for i in range(height):
             for j in range(width):
                 y0 = i * grid_box_height
@@ -415,7 +365,7 @@ class Agent:
                 grid_box = image[y0:y1, x0:x1, :]
                 image_box = Image.fromarray(grid_box)
                 pred = self.image_model.predict(image_box)
-                if pred == "human":
+                if pred == "human" or pred == "sleeping":
                     res_level.add((j, i), create_agent(agent_info["health"]["health"]))
                 elif pred == "wall":
                     res_level.add((j, i), create_wall())
@@ -423,8 +373,135 @@ class Agent:
                     res_level.add((j, i), create_floor(FLOOR_TILE_COST))
                 elif pred == "exit":
                     res_level.add((j, i), create_exit())
+                elif pred == "coin":
+                    res_level.add((j, i), create_coin(COIN_REWARD))
+                elif pred == "gem":
+                    res_level.add((j, i), create_core(reward=0, required=True))
+                elif pred == "lava":
+                    res_level.add(
+                        (j, i),
+                        create_hazard(AppearanceName.LAVA, damage=HAZARDS_DAMMAGE),
+                    )
+                elif pred == "box":
+                    res_level.add((j, i), create_box(pushable=True))
+                elif pred == "metalbox":
+                    direction = self.direction_model.predict(image_box)
+
+                    if direction == "no_direction":
+                        res_level.add((j, i), create_box(pushable=False))
+                    elif direction == "right":
+                        res_level.add(
+                            (j, i),
+                            create_box(
+                                pushable=False,
+                                moving_axis=MovingAxis.HORIZONTAL,
+                                moving_direction=1,
+                            ),
+                        )
+                    elif direction == "left":
+                        res_level.add(
+                            (j, i),
+                            create_box(
+                                pushable=False,
+                                moving_axis=MovingAxis.HORIZONTAL,
+                                moving_direction=-1,
+                            ),
+                        )
+                    elif direction == "up":
+                        res_level.add(
+                            (j, i),
+                            create_box(
+                                pushable=False,
+                                moving_axis=MovingAxis.VERTICAL,
+                                moving_direction=-1,
+                            ),
+                        )
+                    else:
+                        res_level.add(
+                            (j, i),
+                            create_box(
+                                pushable=False,
+                                moving_axis=MovingAxis.VERTICAL,
+                                moving_direction=1,
+                            ),
+                        )
+                elif pred == "key":
+                    res_level.add((j, i), create_key("default_id"))
+                elif pred == "locked":
+                    res_level.add((j, i), create_door("default_id"))
+                elif pred == "spike":
+                    res_level.add(
+                        (j, i),
+                        create_hazard(
+                            appearance=AppearanceName.SPIKE, damage=HAZARDS_DAMMAGE
+                        ),
+                    )
+                elif pred == "robot":
+                    direction = self.direction_model.predict(image_box)
+
+                    if direction == "no_direction":
+                        res_level.add((j, i), create_monster(damage=ENEMIES_DAMAGE))
+                    elif direction == "right":
+                        res_level.add(
+                            (j, i),
+                            create_monster(
+                                damage=ENEMIES_DAMAGE,
+                                moving_axis=MovingAxis.HORIZONTAL,
+                                moving_direction=1,
+                            ),
+                        )
+                    elif direction == "left":
+                        res_level.add(
+                            (j, i),
+                            create_monster(
+                                damage=ENEMIES_DAMAGE,
+                                moving_axis=MovingAxis.HORIZONTAL,
+                                moving_direction=-1,
+                            ),
+                        )
+                    elif direction == "up":
+                        res_level.add(
+                            (j, i),
+                            create_monster(
+                                damage=ENEMIES_DAMAGE,
+                                moving_axis=MovingAxis.VERTICAL,
+                                moving_direction=-1,
+                            ),
+                        )
+                    else:
+                        res_level.add(
+                            (j, i),
+                            create_monster(
+                                damage=ENEMIES_DAMAGE,
+                                moving_axis=MovingAxis.VERTICAL,
+                                moving_direction=1,
+                            ),
+                        )
+
+                elif pred == "portal":
+                    if portal_count > 2:
+                        res_level.add((j, i), create_floor(FLOOR_TILE_COST))
+                    elif lst_portal is None:
+                        lst_portal = create_portal()
+                        portal_count += 1
+                        res_level.add((j, i), lst_portal)
+                    elif lst_portal is not None:
+                        portal_count += 1
+                        res_level.add((j, i), create_portal(pair=lst_portal))
+                elif pred == "ghost":
+                    res_level.add((j, i), create_phasing_effect(time=POWERUP_DURATION))
+                elif pred == "shield":
+                    res_level.add(
+                        (j, i), create_immunity_effect(usage=POWERUP_DURATION)
+                    )
+                elif pred == "boots":
+                    res_level.add(
+                        (j, i), create_speed_effect(multiplier=2, time=POWERUP_DURATION)
+                    )
+                elif pred == "opened":
+                    res_level.add((j, i), create_floor(FLOOR_TILE_COST))
                 else:
-                    raise RuntimeError("I DONT KNOW WHAT THIS IS {}".format(pred))
+                    res_level.add((j, i), create_floor(FLOOR_TILE_COST))
         return res_level
 
     def step(self, state: "Level | Observation") -> "Action":
@@ -437,11 +514,13 @@ class Agent:
 
                 return action
 
+            self.direction_model = DirectionClassify()
             self.image_model = ImageClassify()
+
             current_level = self.parse_image(state)
             self.current_state = to_state(current_level)
+
             action = self.astar(self.current_state)
-            print(action)
             self.current_state = step(self.current_state, action)
             return action
         elif isinstance(state, Level):
